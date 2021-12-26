@@ -1,4 +1,4 @@
 package onenight.gameState;
 
-public class DayState {
+public class DayState implements GameState{
 }
