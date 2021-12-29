@@ -9,16 +9,23 @@ import org.javacord.api.entity.message.Message;
 import org.javacord.api.entity.user.User;
 import org.javacord.api.event.message.MessageCreateEvent;
 
+import java.io.FileInputStream;
+import java.io.IOException;
 import java.util.ArrayList;
 import java.util.List;
+import java.util.Properties;
 import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.ExecutionException;
 
 import static java.lang.Thread.sleep;
 
 public class discordBot {
-    public static void main(String[] args) {
-        String token = "OTI0ODE0OTc5NjA4MjQ4MzIw.YckDEQ.PPv9_xvlanBCIFSsUmq1O1Ux2IQ";
+    public static void main(String[] args) throws IOException {
+        Properties prop = new Properties();
+        FileInputStream ip = new FileInputStream("src/main/java/discordFrontend/config/botconfig.properties");
+        prop.load(ip);
+        String token = prop.getProperty("token");
+        System.out.println(token);
         DiscordApi api = new DiscordApiBuilder().setToken(token).login().join();
         System.out.println(api.getClientId());
         System.out.println(api.getOwnerId());
