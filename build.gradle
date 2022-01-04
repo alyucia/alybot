@@ -16,6 +16,7 @@ repositories {
 dependencies {
     testImplementation 'org.junit.jupiter:junit-jupiter-api:5.8.2'
     testRuntimeOnly 'org.junit.jupiter:junit-jupiter-engine:5.8.2'
+    implementation 'com.vdurmont:emoji-java:5.1.1'
     implementation 'org.javacord:javacord:3.3.2'
     implementation 'com.google.api-client:google-api-client:1.32.2'
     implementation 'com.google.oauth-client:google-oauth-client-jetty:1.32.1'

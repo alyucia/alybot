@@ -1,5 +1,6 @@
 package discordFrontend.dndscraper;
 
+import com.vdurmont.emoji.EmojiParser;
 import discordFrontend.dndscraper.exceptions.NotARollException;
 import discordFrontend.dndscraper.exceptions.RollWaitException;
 import org.javacord.api.entity.channel.TextChannel;
@@ -67,7 +68,7 @@ public class DNDScraper {
                 msgReader.start();
             }
             if(event1.getMessageContent().equalsIgnoreCase("!endsession")){
-                event1.getMessage().addReaction("\u2705");
+                event1.getMessage().addReaction(EmojiParser.parseToUnicode(":white_check_mark:"));
                 for (List<DNDentry> eList: entries.values()) {
                     for (DNDentry entry : eList) {
                         try {
@@ -156,18 +157,18 @@ public class DNDScraper {
     }
     public void addReactionListeners(Message msg){
         String msgId = msg.getIdAsString();
-        msg.addReaction("\u274C");
-        msg.addReaction("\uD83C\uDDE6");
+        msg.addReaction(EmojiParser.parseToUnicode(":x:"));
+        msg.addReaction(EmojiParser.parseToUnicode(":regional_indicator_symbol_a:"));
         var addListener = new AtomicReference<ReactionAddListener>();
         addListener.set(event -> {
             if (event.getUserIdAsString().equalsIgnoreCase(BOT_ID))
                 return;
             List<DNDentry> eList = entries.get(msgId);
-            if(event.getEmoji().equalsEmoji("\u274C")){
+            if(event.getEmoji().equalsEmoji(EmojiParser.parseToUnicode(":x:"))){
                 for(DNDentry ent : eList) {
                     ent.setUpload(false);
                 }
-            } else if(event.getEmoji().equalsEmoji("\uD83C\uDDE6")){
+            } else if(event.getEmoji().equalsEmoji(EmojiParser.parseToUnicode(":regional_indicator_symbol_a:"))){
                 for(DNDentry ent : eList){
                     ent.setAdvantage(true);
                 }
@@ -177,19 +178,18 @@ public class DNDScraper {
         removeListener.set(event -> {
             if (event.getUserIdAsString().equalsIgnoreCase(BOT_ID))
                 return;
-            System.out.println(event.getEmoji().equalsEmoji("\uD83C\uDDE6"));
             List<DNDentry> eList = entries.get(msgId);
-            if(event.getEmoji().equalsEmoji("\u274C")){
+            if(event.getEmoji().equalsEmoji(EmojiParser.parseToUnicode(":x:"))){
                 for(DNDentry ent : eList) {
                     ent.setUpload(true);
                 }
-            } else if(event.getEmoji().equalsEmoji("\uD83C\uDDE6")){
+            } else if(event.getEmoji().equalsEmoji(EmojiParser.parseToUnicode(":regional_indicator_symbol_a:"))){
                 for(DNDentry ent : eList){
                     ent.setAdvantage(false);
                 }
             }
         });
-        msg.addReactionAddListener(addListener.get()).removeAfter(5, TimeUnit.MINUTES);
-        msg.addReactionRemoveListener(removeListener.get()).removeAfter(5, TimeUnit.MINUTES);
+        msg.addReactionAddListener(addListener.get()).removeAfter(15, TimeUnit.MINUTES);
+        msg.addReactionRemoveListener(removeListener.get()).removeAfter(15, TimeUnit.MINUTES);
     }
 }

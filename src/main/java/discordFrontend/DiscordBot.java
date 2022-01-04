@@ -1,6 +1,7 @@
 package discordFrontend;
 
 
+import com.vdurmont.emoji.EmojiParser;
 import discordFrontend.dndscraper.DNDScraper;
 import sheetWriter.SheetWriter;
 import org.javacord.api.*;
@@ -49,7 +50,7 @@ public class DiscordBot {
             Matcher matcher = pattern.matcher(event.getMessageContent());
             if (matcher.find()) {
                 if (event.getMessageAuthor().getId() != api.getOwnerId()){
-                    event.getMessage().addReaction("\u274C");
+                    event.getMessage().addReaction(EmojiParser.parseToUnicode(":x:"));
                     return;
                 }
                 int num = Integer.parseInt(event.getMessageContent().split(" ")[1]) + 1;
@@ -109,7 +110,7 @@ public class DiscordBot {
     private void startDND(MessageCreateEvent event) throws ExecutionException, InterruptedException {
         Message userMessage = event.getMessage();
         TextChannel dndChannel = event.getChannel();
-        userMessage.addReaction("\u2705");
+        userMessage.addReaction(EmojiParser.parseToUnicode(":white_check_mark:"));
 
         SheetWriter sheetWriter = new SheetWriter("1eftAShN3ANHruHbOoeccwpo3gdEtz8LiLygOtO6Q3I4");
 
@@ -131,9 +132,9 @@ public class DiscordBot {
         Message userMessage = event.getMessage();
         TextChannel gameChannel = event.getChannel();
         Message starterMessage = gameChannel.sendMessage("Starting game!").get();
-        starterMessage.addReaction("\u2705");
+        starterMessage.addReaction(EmojiParser.parseToUnicode(":white_check_mark:"));
         sleep(15000);
-        List<User> userList= starterMessage.getReactionByEmoji("\u2705").get().getUsers().get();
+        List<User> userList= starterMessage.getReactionByEmoji(EmojiParser.parseToUnicode(":white_check_mark:")).get().getUsers().get();
         for (User u : userList) {
             ids.add(u.getIdAsString());
         }
