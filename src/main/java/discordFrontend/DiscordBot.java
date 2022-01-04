@@ -116,11 +116,11 @@ public class DiscordBot {
         DNDScraper dndScraper = new DNDScraper(dndChannel, sheetWriter);
         dndScraper.startListening();
         //Example sheet write
-        try {
+/*        try {
             sheetWriter.writeInfo(List.of(new String[]{"test1", "test2", "testing3"}));
         } catch (Exception e) {
             System.out.println(e.getMessage());
-        }
+        }*/
     }
 
 

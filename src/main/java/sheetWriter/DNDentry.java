@@ -1,6 +1,9 @@
 package sheetWriter;
 
 import java.time.Instant;
+import java.util.ArrayList;
+import java.util.Arrays;
+import java.util.List;
 
 public class DNDentry {
     private Instant createTime;
@@ -19,7 +22,7 @@ public class DNDentry {
         this.name = n;
         this.skill = s;
         this.dice = d;
-        this.roll = r;
+        this.roll = r.replace("*", "");
         this.mod = m;
         this.total = t;
         this.msgId = mi;
@@ -38,5 +41,9 @@ public class DNDentry {
                 ", msgId='" + msgId + '\'' +
                 ", advantage=" + advantage +
                 '}';
+    }
+
+    public List<String> asStringArrayList(){
+        return new ArrayList<String>(Arrays.asList(name, skill, dice, roll, mod, total, createTime.toString(), msgId, Boolean.toString(advantage)));
     }
 }

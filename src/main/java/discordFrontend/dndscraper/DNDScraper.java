@@ -10,6 +10,8 @@ import org.javacord.api.listener.message.MessageEditListener;
 import sheetWriter.DNDentry;
 import sheetWriter.SheetWriter;
 
+import java.io.IOException;
+import java.security.GeneralSecurityException;
 import java.time.Instant;
 import java.util.ArrayList;
 import java.util.List;
@@ -26,7 +28,7 @@ public class DNDScraper {
     private final String INITIATIVE_REGEX = "\\*\\*([A-Za-z]*(?:\\s[A-Za-z]*)?):\\sInitiative:\\sRoll\\*\\*:\\s1d20\\s\\(([*0-9]*)\\)\\s?([+-]\\s[0-9]{0,2})\\n\\*\\*Total\\*\\*:\\s([0-9]*)$";
     private final String TITLE_REGEX = "^([A-Z]{1}[a-z]*(?:\\s[A-Z]{1}[a-z]*)?)\\s(attacks|casts|heals|makes)\\s(?:with\\s)?(?:a\\s)?(?:an\\s)?([a-zA-Z\\s]*)!$";
     private final String ATTACK_REGEX = "^(?:(?:\\*\\*To\\sHit\\*\\*:\\s)([0-9]*d[0-9]*)\\s\\(([0-9\\*]*(?:,\\s[\\*0-9]*)*)\\)(\\s[+-]\\s[0-9]*)?\\s=\\s`([0-9]*)`\\n)?\\*\\*Damage(?:\\s\\(CRIT!\\))?\\*\\*:\\s([0-9]*d[0-9]*)\\s\\(([\\*0-9]*(?:,\\s[\\*0-9]*)*)\\)(\\s[+-]\\s[0-9]*)?\\s=\\s`([0-9]*)`$";
-    private final String CHECK_REGEX = "^([0-9]*d[0-9]*)\\s\\(([0-9]*)\\)\\s([+-]\\s[0-9]\\s)?=\\s([0-9]*)";
+    private final String CHECK_REGEX = "^([0-9]*d[0-9]*)\\s\\(([0-9]*)\\)\\s([+-]\\s[0-9]\\s)?=\\s`([0-9]*)`";
     private final TextChannel scrapedChannel;
     private final SheetWriter sheetWriter;
     private List<DNDentry> entries;
@@ -50,13 +52,13 @@ public class DNDScraper {
                         listener2.set(event2 -> {
                             try {
                                 parseMessage(event1.getMessage());
-                            } catch (RollWaitException | NotARollException ex) {
+                            } catch (Exception ex) {
                                 ex.printStackTrace();
                             }
                             botMsg.removeMessageAttachableListener(listener2.get());
                         });
                         botMsg.addMessageEditListener(listener2.get()).removeAfter(15, TimeUnit.MINUTES);
-                    } catch (NotARollException ex){
+                    } catch (Exception ex){
                         ex.printStackTrace();
                     }
                     //Should writing to sheet be inside or outside of message?
@@ -71,7 +73,7 @@ public class DNDScraper {
         this.scrapedChannel.addMessageCreateListener(listener.get());
     }
 
-    private void parseMessage(Message msg) throws RollWaitException, NotARollException {
+    private void parseMessage(Message msg) throws RollWaitException, NotARollException, GeneralSecurityException, IOException {
         Pattern pattern = Pattern.compile(INITIATIVE_REGEX);
         Matcher matcher = pattern.matcher(msg.getContent());
         //Check if it's an initiative roll, and parse it if it is.
@@ -83,6 +85,7 @@ public class DNDScraper {
             String mod = matcher.group(3);
             String total = matcher.group(4);
             entries.add(new DNDentry(createTime, name, "Initiative", "1d20", roll, mod, total, msgId));
+            return;
         }
         String title;
         try {
@@ -102,6 +105,8 @@ public class DNDScraper {
             String meta = msg.getEmbeds().get(0).getDescription().get();
             pattern = Pattern.compile(CHECK_REGEX);
             matcher = pattern.matcher(meta);
+            if (!matcher.find())
+                throw new NotARollException();
             String dice = matcher.group(1);
             String roll = matcher.group(2);
             String mod = matcher.group(3);
@@ -109,16 +114,13 @@ public class DNDScraper {
             entries.add(new DNDentry(createTime, name, skill, dice, roll, mod, total, msgId));
         } else if (type.equalsIgnoreCase("heals")) {
             //TODO: healing shit
-        }
-
-        else{
+        } else{
             String meta = msg.getEmbeds().get(0).getFields().get(0).getValue();
             if (meta.contains("Waiting for roll...")){
                 throw new RollWaitException();
             }
             pattern = Pattern.compile(ATTACK_REGEX);
             matcher = pattern.matcher(meta);
-            System.out.println(meta);
             if (!matcher.matches())
                 throw new NotARollException();
             if (meta.contains("To Hit")) {
@@ -135,5 +137,9 @@ public class DNDScraper {
             entries.add(new DNDentry(createTime, name, skill + " damage", damageDice, damageRoll, damageMod, damageTotal, msgId + "b"));
         }
         //TODO: send everything else to sheet
+        for (DNDentry entry : entries) {
+            sheetWriter.writeInfo(entry.asStringArrayList());
+        }
+        entries.clear();
     }
 }
