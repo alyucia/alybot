@@ -15,6 +15,7 @@ public class DNDentry {
     private String total = "N/A";
     private String msgId;
     private boolean advantage = false;
+    private boolean upload = true;
 
 
     public DNDentry(Instant cTime, String n, String s, String d, String r, String m, String t, String mi){
@@ -28,6 +29,17 @@ public class DNDentry {
         this.msgId = mi;
     }
 
+    public void setAdvantage(boolean a){
+        this.advantage = a;
+    }
+
+    public void setUpload(boolean u){
+        this.upload = u;
+    }
+
+    public boolean getUpload(){
+        return upload;
+    }
     @Override
     public String toString() {
         return "DNDentry{" +

@@ -113,7 +113,7 @@ public class DiscordBot {
 
         SheetWriter sheetWriter = new SheetWriter("1eftAShN3ANHruHbOoeccwpo3gdEtz8LiLygOtO6Q3I4");
 
-        DNDScraper dndScraper = new DNDScraper(dndChannel, sheetWriter);
+        DNDScraper dndScraper = new DNDScraper(dndChannel, sheetWriter, String.valueOf(api.getClientId()));
         dndScraper.startListening();
         //Example sheet write
 /*        try {
