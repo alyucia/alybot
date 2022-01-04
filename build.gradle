@@ -4,7 +4,6 @@ plugins {
 }
 
 group 'org.example'
-mainClassName = 'DNDScraper'
 
 version '1.0'
 sourceCompatibility = 15

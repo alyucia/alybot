@@ -9,30 +9,24 @@ import org.javacord.api.entity.message.Message;
 import org.javacord.api.entity.message.MessageSet;
 import org.javacord.api.entity.user.User;
 import org.javacord.api.event.message.MessageCreateEvent;
-import org.javacord.api.listener.message.MessageCreateListener;
-import org.javacord.api.listener.message.MessageEditListener;
 
-import java.io.FileInputStream;
-import java.io.IOException;
 import java.util.ArrayList;
 import java.util.List;
-import java.util.Properties;
 import java.util.concurrent.ExecutionException;
-import java.util.concurrent.TimeUnit;
-import java.util.concurrent.atomic.AtomicReference;
 import java.util.regex.Matcher;
 import java.util.regex.Pattern;
 
 import static java.lang.Thread.sleep;
 
-public class discordBot {
-    public static void main(String[] args) throws IOException {
-        Properties prop = new Properties();
-        FileInputStream ip = new FileInputStream("src/main/java/discordFrontend/config/botconfig.properties");
-        prop.load(ip);
-        String token = prop.getProperty("token");
-        DiscordApi api = new DiscordApiBuilder().setToken(token).login().join();
+public class DiscordBot {
+    private final DiscordApi api;
 
+    public DiscordBot(String botToken){
+        this.api = new DiscordApiBuilder().setToken(botToken).login().join();
+
+        System.out.println("You can invite the bot by using the following url: " + api.createBotInvite());
+    }
+    public void startListeners() {
         api.addMessageCreateListener(event -> {
             Pattern pattern = Pattern.compile("^!ping", Pattern.CASE_INSENSITIVE);
             Matcher matcher = pattern.matcher(event.getMessageContent());
@@ -101,6 +95,7 @@ public class discordBot {
             }
         });
 
+        //slash command examples
 /*        SlashCommand ping = SlashCommand.with("ping", "test").createGlobal(api).join();
         api.addSlashCommandCreateListener(event -> {
             SlashCommandInteraction slashCommandInteraction = event.getSlashCommandInteraction();    slashCommandInteraction.createImmediateResponder()
@@ -108,20 +103,18 @@ public class discordBot {
                     .respond();
 
         });*/
-            System.out.println("You can invite the bot by using the following url: " + api.createBotInvite());
-
     }
 
     //Starts a DND tracking session.
-    private static void startDND(MessageCreateEvent event) throws ExecutionException, InterruptedException {
+    private void startDND(MessageCreateEvent event) throws ExecutionException, InterruptedException {
         Message userMessage = event.getMessage();
         TextChannel dndChannel = event.getChannel();
         userMessage.addReaction("\u2705");
 
-        DNDScraper dndScraper = new DNDScraper(dndChannel);
-        dndScraper.startListening();
+        SheetWriter sheetWriter = new SheetWriter("1eftAShN3ANHruHbOoeccwpo3gdEtz8LiLygOtO6Q3I4");
 
-        SheetWriter sheetWriter = new SheetWriter();
+        DNDScraper dndScraper = new DNDScraper(dndChannel, sheetWriter);
+        dndScraper.startListening();
         //Example sheet write
         try {
             sheetWriter.writeInfo(List.of(new String[]{"test1", "test2", "testing3"}));
@@ -133,7 +126,7 @@ public class discordBot {
 
 
 
-    private static void startGame(MessageCreateEvent event) throws ExecutionException, InterruptedException {
+    private void startGame(MessageCreateEvent event) throws ExecutionException, InterruptedException {
         List<String> ids = new ArrayList();
         Message userMessage = event.getMessage();
         TextChannel gameChannel = event.getChannel();

@@ -39,8 +39,8 @@ public class SheetWriter {
     private String spreadsheetId;
 
 
-    public SheetWriter(){
-        this.spreadsheetId = "1eftAShN3ANHruHbOoeccwpo3gdEtz8LiLygOtO6Q3I4";
+    public SheetWriter(String ssId){
+        this.spreadsheetId = ssId;
     }
 
     /**
@@ -67,10 +67,6 @@ public class SheetWriter {
         return new AuthorizationCodeInstalledApp(flow, receiver).authorize("user");
     }
 
-    /**
-     * Prints the names and majors of students in a sample spreadsheet:
-     * https://docs.google.com/spreadsheets/d/1BxiMVs0XRA5nFMdKvBdBZjgmUUqptlbs74OgvE2upms/edit
-     */
 
     public Sheets getSheetsService() throws IOException, GeneralSecurityException {
         final NetHttpTransport HTTP_TRANSPORT = GoogleNetHttpTransport.newTrustedTransport();
@@ -102,10 +98,5 @@ public class SheetWriter {
                 .execute();
     }
 
-
-    //public static void main(String... args) throws IOException, GeneralSecurityException {
-        // Build a new authorized API client service.
-        // final NetHttpTransport HTTP_TRANSPORT = GoogleNetHttpTransport.newTrustedTransport();
-    //}
 
 }
