@@ -14,7 +14,8 @@ public class runBot {
         FileInputStream ip = new FileInputStream(BOT_CONFIG_FILE_PATH);
         prop.load(ip);
         String token = prop.getProperty("token");
-        DiscordBot discordBot = new DiscordBot(token);
-        discordBot.startListeners();
+        String prefix = prop.getProperty("prefix");
+        DiscordBot discordBot = new DiscordBot(token, prefix);
+        discordBot.startListener();
     }
 }

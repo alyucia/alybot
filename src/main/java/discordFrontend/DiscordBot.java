@@ -23,81 +23,30 @@ import static java.lang.Thread.sleep;
 public class DiscordBot {
     private final DiscordApi api;
     private final ExecutorService executors;
+    private final String prefix;
 
-    public DiscordBot(String botToken){
+    public DiscordBot(String botToken, String px){
         this.api = new DiscordApiBuilder().setToken(botToken).login().join();
         this.executors = api.getThreadPool().getExecutorService();
+        this.prefix = px;
 
         System.out.println("You can invite the bot by using the following url: " + api.createBotInvite());
     }
-    public void startListeners() {
-        api.addMessageCreateListener(event -> {
-            Pattern pattern = Pattern.compile("^!ping", Pattern.CASE_INSENSITIVE);
-            Matcher matcher = pattern.matcher(event.getMessageContent());
-            if (matcher.find()) {
-                User author = event.getMessageAuthor().asUser().get();
-                String id = author.getIdAsString();
-                event.getChannel().sendMessage("Pong! <@" + id + ">");
-/*                try {
-                    PrivateChannel userChannel = author.openPrivateChannel().get();
-                    userChannel.sendMessage("Test!");
-                } catch (InterruptedException e) {
-                    e.printStackTrace();
-                } catch (ExecutionException e) {
-                    e.printStackTrace();
-                }*/
-            }
-        });
-        api.addMessageCreateListener(event -> {
-            Pattern pattern = Pattern.compile("^!clearmsgs", Pattern.CASE_INSENSITIVE);
-            Matcher matcher = pattern.matcher(event.getMessageContent());
-            if (matcher.find()) {
-                if (event.getMessageAuthor().getId() != api.getOwnerId()){
-                    event.getMessage().addReaction(EmojiParser.parseToUnicode(":x:"));
-                    return;
-                }
-                int num = Integer.parseInt(event.getMessageContent().split(" ")[1]) + 1;
-                TextChannel clearChannel = event.getChannel();
-                try {
-                    MessageSet msgs = clearChannel.getMessages(num).get();
-                    msgs.deleteAll();
-                } catch (Exception e) {
-                    e.printStackTrace();
-                }
-            }
-        });
+    public void startListener() {
 
         api.addMessageCreateListener(event -> {
-            Pattern pattern = Pattern.compile("^!startgame", Pattern.CASE_INSENSITIVE);
+            Pattern pattern = Pattern.compile("^" + prefix + "([a-zA-Z]*)(?:\\s([a-zA-Z\\s]*))?", Pattern.CASE_INSENSITIVE);
             Matcher matcher = pattern.matcher(event.getMessageContent());
-            if (matcher.find()) {
-                //Thread gameThread = new Thread(() -> {
-                executors.execute(() -> {
+            if (matcher.matches()) {
+                String command = matcher.group(1);
+                String parameters = matcher.group(2);
+                executors.execute(()->{
                     try {
-                        startGame(event);
-                    } catch (ExecutionException e) {
-                        e.printStackTrace();
-                    } catch (InterruptedException e) {
-                        e.printStackTrace();
-                    }
-                });
-                //gameThread.start();
-            }
-        });
-
-        api.addMessageCreateListener(event -> {
-            Pattern pattern = Pattern.compile("^!startsession", Pattern.CASE_INSENSITIVE);
-            Matcher matcher = pattern.matcher(event.getMessageContent());
-            if (matcher.find()) {
-                //Thread dndThread = new Thread(() -> {
-                executors.execute(() -> {
-                    try {
-                        startDND(event);
+                        doCommand(command, parameters, event);
                     } catch (Exception e) {
                         e.printStackTrace();
                     }
                 });
-                //dndThread.start();
             }
         });
 
@@ -110,6 +59,26 @@ public class DiscordBot {
 
         });*/
     }
+    public void doCommand(String command, String parameters, MessageCreateEvent event) throws exceptions.NotCommandException, exceptions.BadParameterException, ExecutionException, InterruptedException {
+        switch (command){
+            case "ping":
+                ping(event);
+                break;
+            case "startsession":
+                startDND(event);
+                break;
+            case "startgame":
+                startGame(event);
+                break;
+            case "clearmsgs":
+                clearMessages(event, parameters);
+                break;
+            default:
+                throw new exceptions.NotCommandException();
+        }
+    }
+
+
 
     //Starts a DND tracking session.
     private void startDND(MessageCreateEvent event) {
@@ -121,7 +90,6 @@ public class DiscordBot {
 
         DNDScraper dndScraper = new DNDScraper(api.getThreadPool(), dndChannel, sheetWriter, String.valueOf(api.getClientId()));
         dndScraper.startListening();
-
 
         //Example sheet write
 /*        try {
@@ -172,6 +140,35 @@ public class DiscordBot {
                 System.out.println(ids);
             }
         });*/
+
+    }
+    private void ping(MessageCreateEvent event){
+        User author = event.getMessageAuthor().asUser().get();
+        String id = author.getIdAsString();
+        event.getChannel().sendMessage("Pong! <@" + id + ">");
+/*                try {
+                    PrivateChannel userChannel = author.openPrivateChannel().get();
+                    userChannel.sendMessage("Test!");
+                } catch (InterruptedException e) {
+                    e.printStackTrace();
+                } catch (ExecutionException e) {
+                    e.printStackTrace();
+                }*/
+    }
+
+    private void clearMessages(MessageCreateEvent event, String parameters) throws ExecutionException, InterruptedException, exceptions.BadParameterException {
+        if (event.getMessageAuthor().getId() != api.getOwnerId()){
+            event.getMessage().addReaction(EmojiParser.parseToUnicode(":x:"));
+            return;
+        }
+        try {
+            int num = Integer.parseInt(parameters) + 1;
+            TextChannel clearChannel = event.getChannel();
+            MessageSet msgs = clearChannel.getMessages(num).get();
+            msgs.deleteAll();
+        } catch (NumberFormatException e){
+            throw new exceptions.BadParameterException();
+        }
 
     }
 }
