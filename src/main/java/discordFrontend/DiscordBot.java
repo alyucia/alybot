@@ -14,6 +14,7 @@ import org.javacord.api.event.message.MessageCreateEvent;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.concurrent.ExecutionException;
+import java.util.concurrent.ExecutorService;
 import java.util.regex.Matcher;
 import java.util.regex.Pattern;
 
@@ -21,9 +22,11 @@ import static java.lang.Thread.sleep;
 
 public class DiscordBot {
     private final DiscordApi api;
+    private final ExecutorService executors;
 
     public DiscordBot(String botToken){
         this.api = new DiscordApiBuilder().setToken(botToken).login().join();
+        this.executors = api.getThreadPool().getExecutorService();
 
         System.out.println("You can invite the bot by using the following url: " + api.createBotInvite());
     }
@@ -68,7 +71,8 @@ public class DiscordBot {
             Pattern pattern = Pattern.compile("^!startgame", Pattern.CASE_INSENSITIVE);
             Matcher matcher = pattern.matcher(event.getMessageContent());
             if (matcher.find()) {
-                Thread gameThread = new Thread(() -> {
+                //Thread gameThread = new Thread(() -> {
+                executors.execute(() -> {
                     try {
                         startGame(event);
                     } catch (ExecutionException e) {
@@ -77,7 +81,7 @@ public class DiscordBot {
                         e.printStackTrace();
                     }
                 });
-                gameThread.start();
+                //gameThread.start();
             }
         });
 
@@ -85,14 +89,15 @@ public class DiscordBot {
             Pattern pattern = Pattern.compile("^!startsession", Pattern.CASE_INSENSITIVE);
             Matcher matcher = pattern.matcher(event.getMessageContent());
             if (matcher.find()) {
-                Thread dndThread = new Thread(() -> {
+                //Thread dndThread = new Thread(() -> {
+                executors.execute(() -> {
                     try {
                         startDND(event);
                     } catch (Exception e) {
                         e.printStackTrace();
                     }
                 });
-                dndThread.start();
+                //dndThread.start();
             }
         });
 
@@ -107,18 +112,23 @@ public class DiscordBot {
     }
 
     //Starts a DND tracking session.
-    private void startDND(MessageCreateEvent event) throws ExecutionException, InterruptedException {
+    private void startDND(MessageCreateEvent event) {
         Message userMessage = event.getMessage();
         TextChannel dndChannel = event.getChannel();
         userMessage.addReaction(EmojiParser.parseToUnicode(":white_check_mark:"));
 
         SheetWriter sheetWriter = new SheetWriter("1eftAShN3ANHruHbOoeccwpo3gdEtz8LiLygOtO6Q3I4");
 
-        DNDScraper dndScraper = new DNDScraper(dndChannel, sheetWriter, String.valueOf(api.getClientId()));
+        DNDScraper dndScraper = new DNDScraper(api.getThreadPool(), dndChannel, sheetWriter, String.valueOf(api.getClientId()));
         dndScraper.startListening();
+
+
         //Example sheet write
 /*        try {
+            double startTime = System.nanoTime();
             sheetWriter.writeInfo(List.of(new String[]{"test1", "test2", "testing3"}));
+            double endTime = System.nanoTime();
+            System.out.println((endTime - startTime) / 1000000);
         } catch (Exception e) {
             System.out.println(e.getMessage());
         }*/

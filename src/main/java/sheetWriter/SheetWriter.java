@@ -23,6 +23,8 @@ import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.Collections;
 import java.util.List;
+import java.util.concurrent.ExecutorService;
+import java.util.concurrent.Executors;
 
 public class SheetWriter {
     private static final String APPLICATION_NAME = "DND SheetWriter";
@@ -35,12 +37,15 @@ public class SheetWriter {
      */
     private static final List<String> SCOPES = Collections.singletonList(SheetsScopes.SPREADSHEETS);
     private static final String CREDENTIALS_FILE_PATH = "/credentials.json";
+    private static final int MAX_THREADS = 5;
 
     private String spreadsheetId;
+    private ExecutorService executorPool;
 
 
     public SheetWriter(String ssId){
         this.spreadsheetId = ssId;
+        executorPool = Executors.newFixedThreadPool(MAX_THREADS);
     }
 
     /**
@@ -76,26 +81,32 @@ public class SheetWriter {
         return service;
     }
 
-    public void writeInfo(List<String> info) throws IOException, GeneralSecurityException {
-        Sheets service = getSheetsService();
-        List<Request> requests = new ArrayList<>();
-        List<CellData> values = new ArrayList<>();
-        for (String infoPoint: info) {
-            values.add(new CellData()
-                    .setUserEnteredValue(new ExtendedValue()
-                            .setStringValue(infoPoint)));
-        }
-        requests.add(new Request()
-                .setAppendCells(new AppendCellsRequest()
-                        .setSheetId(408888496)
-                        .setRows(Arrays.asList(
-                                new RowData().setValues(values)))
-                        .setFields("userEnteredValue,userEnteredFormat.backgroundColor")));
+    public void writeInfo(List<String> info) {
+        executorPool.execute(()-> {
+            try {
+                Sheets service = getSheetsService();
+                List<Request> requests = new ArrayList<>();
+                List<CellData> values = new ArrayList<>();
+                for (String infoPoint : info) {
+                    values.add(new CellData()
+                            .setUserEnteredValue(new ExtendedValue()
+                                    .setStringValue(infoPoint)));
+                }
+                requests.add(new Request()
+                        .setAppendCells(new AppendCellsRequest()
+                                .setSheetId(408888496)
+                                .setRows(Arrays.asList(
+                                        new RowData().setValues(values)))
+                                .setFields("userEnteredValue,userEnteredFormat.backgroundColor")));
 
-        BatchUpdateSpreadsheetRequest batchUpdateRequest = new BatchUpdateSpreadsheetRequest()
-                .setRequests(requests);
-        service.spreadsheets().batchUpdate(this.spreadsheetId, batchUpdateRequest)
-                .execute();
+                BatchUpdateSpreadsheetRequest batchUpdateRequest = new BatchUpdateSpreadsheetRequest()
+                        .setRequests(requests);
+                service.spreadsheets().batchUpdate(this.spreadsheetId, batchUpdateRequest)
+                        .execute();
+            } catch (Exception e){
+                e.printStackTrace();
+            }
+        });
     }
 
 

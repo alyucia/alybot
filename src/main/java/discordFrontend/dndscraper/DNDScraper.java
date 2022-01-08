@@ -9,11 +9,14 @@ import org.javacord.api.listener.message.MessageCreateListener;
 import org.javacord.api.listener.message.MessageEditListener;
 import org.javacord.api.listener.message.reaction.ReactionAddListener;
 import org.javacord.api.listener.message.reaction.ReactionRemoveListener;
+import org.javacord.api.util.concurrent.ThreadPool;
 import sheetWriter.DNDentry;
 import sheetWriter.SheetWriter;
 
 import java.time.Instant;
 import java.util.*;
+import java.util.concurrent.ExecutorService;
+import java.util.concurrent.ScheduledExecutorService;
 import java.util.concurrent.TimeUnit;
 import java.util.concurrent.atomic.AtomicReference;
 import java.util.regex.Matcher;
@@ -26,14 +29,19 @@ public class DNDScraper {
     //RegEx strings
     private final String INITIATIVE_REGEX = "\\*\\*([A-Za-z]*(?:\\s[A-Za-z]*)?):\\sInitiative:\\sRoll\\*\\*:\\s1d20\\s\\(([*0-9]*)\\)\\s?([+-]\\s[0-9]{0,2})\\n\\*\\*Total\\*\\*:\\s([0-9]*)$";
     private final String TITLE_REGEX = "^([A-Z]{1}[a-z]*(?:\\s[A-Z]{1}[a-z]*)?)\\s(attacks|casts|heals|makes)\\s(?:with\\s)?(?:a\\s)?(?:an\\s)?([a-zA-Z\\s]*)!$";
-    private final String ATTACK_REGEX = "^(?:(?:\\*\\*To\\sHit\\*\\*:\\s)([0-9]*d[0-9]*)\\s\\(([0-9\\*]*(?:,\\s[\\*0-9]*)*)\\)(\\s[+-]\\s[0-9]*)?\\s=\\s`([0-9]*)`\\n)?\\*\\*Damage(?:\\s\\(CRIT!\\))?\\*\\*:\\s([0-9]*d[0-9]*)\\s\\(([\\*0-9]*(?:,\\s[\\*0-9]*)*)\\)(\\s[+-]\\s[0-9]*)?\\s=\\s`([0-9]*)`$";
-    private final String CHECK_REGEX = "^([0-9]*d[0-9]*)\\s\\(([*0-9]*)\\)\\s([+-]\\s[0-9]\\s)?=\\s`([0-9]*)`";
+    private final String ATTACK_REGEX = "^(?:(?:\\*\\*To\\sHit\\*\\*:\\s)([0-9]*d[0-9]*)\\s\\(([0-9*]*(?:,\\s[0-9*]*)*)\\)(\\s[+-]\\s[0-9]*)?\\s=\\s`([0-9]*)`\\n)?\\*\\*Damage(?:\\s\\(CRIT!\\))?\\*\\*:\\s([0-9]*d[0-9]*)\\s\\(([\\*0-9]*(?:,\\s[\\*0-9]*)*)\\)(\\s[+-]\\s[0-9]*)?\\s=\\s`([0-9]*)`$";
+    private final String CHECK_REGEX = "^([0-9]*d[0-9]*)\\s\\(([*0-9]*(?:,\\s[0-9*]*)*)\\)\\s([+-]\\s[0-9]\\s)?=\\s`([0-9]*)`";
+
+    private final ScheduledExecutorService scheduler;
+    private final ExecutorService executors;
     private final TextChannel scrapedChannel;
     private final SheetWriter sheetWriter;
     private final String BOT_ID;
     private Map<String, List<DNDentry>> entries;
 
-    public DNDScraper(TextChannel channel, SheetWriter writer, String botId){
+    public DNDScraper(ThreadPool threadpool, TextChannel channel, SheetWriter writer, String botId){
+        this.scheduler = threadpool.getScheduler();
+        executors = threadpool.getExecutorService();
         this.scrapedChannel = channel;
         this.sheetWriter = writer;
         this.entries = new LinkedHashMap<>();
@@ -44,7 +52,7 @@ public class DNDScraper {
         var listener = new AtomicReference<MessageCreateListener>();
         listener.set(event1 -> {
             if(event1.getMessageAuthor().getIdAsString().equals(DND_BOT_ID)){
-                Thread msgReader = new Thread(()-> {
+                executors.execute(()-> {
                     Message botMsg = event1.getMessage();
                     try {
                         parseMessage(botMsg);
@@ -55,17 +63,19 @@ public class DNDScraper {
                             try {
                                 parseMessage(event1.getMessage());
                                 addReactionListeners(botMsg);
-                            } catch (Exception ex) {
+                            } catch (NotARollException ex) {
+                                //nothing, this is fine.
+                            } catch (RollWaitException ex){
                                 ex.printStackTrace();
+                                //You should never wait twice.
                             }
                             botMsg.removeMessageAttachableListener(listener2.get());
                         });
                         botMsg.addMessageEditListener(listener2.get()).removeAfter(5, TimeUnit.MINUTES);
-                    } catch (Exception ex){
-                        ex.printStackTrace();
+                    } catch (NotARollException ex){
+                        //nothing, this is fine.
                     }
                 });
-                msgReader.start();
             }
             if(event1.getMessageContent().equalsIgnoreCase("!endsession")){
                 event1.getMessage().addReaction(EmojiParser.parseToUnicode(":white_check_mark:"));
@@ -116,7 +126,7 @@ public class DNDScraper {
             String type = matcher.group(2);
             String skill = matcher.group(3);
             //Check if it's an ability check/save. The embed is different.
-            if (type.equalsIgnoreCase("makes")) {
+            if (type.equalsIgnoreCase("makes") || type.equalsIgnoreCase("heals")) {
                 String meta = msg.getEmbeds().get(0).getDescription().get();
                 pattern = Pattern.compile(CHECK_REGEX);
                 matcher = pattern.matcher(meta);
@@ -127,9 +137,9 @@ public class DNDScraper {
                 String mod = matcher.group(3);
                 String total = matcher.group(4);
                 eList.add(new DNDentry(createTime, name, skill, dice, roll, mod, total, msgId));
-            } else if (type.equalsIgnoreCase("heals")) {
-                //TODO: healing shit
-            } else {
+            } /*else if (type.equalsIgnoreCase("heals")) {
+                //TO DO?: healing shit
+            }*/ else {
                 String meta = msg.getEmbeds().get(0).getFields().get(0).getValue();
                 if (meta.contains("Waiting for roll...")) {
                     throw new RollWaitException();
@@ -153,6 +163,20 @@ public class DNDScraper {
             }
         }
         entries.put(msgId, eList);
+
+        scheduler.schedule(()->{
+            for (DNDentry entry : eList) {
+                try {
+                    if (entry.getUpload()) {
+                        sheetWriter.writeInfo(entry.asStringArrayList());
+                    }
+                } catch (Exception e) {
+                    e.printStackTrace();
+                }
+            }
+            entries.remove(msgId);
+
+        }, 3, TimeUnit.MINUTES);
 
     }
     public void addReactionListeners(Message msg){
@@ -189,7 +213,7 @@ public class DNDScraper {
                 }
             }
         });
-        msg.addReactionAddListener(addListener.get()).removeAfter(15, TimeUnit.MINUTES);
-        msg.addReactionRemoveListener(removeListener.get()).removeAfter(15, TimeUnit.MINUTES);
+        msg.addReactionAddListener(addListener.get()).removeAfter(3, TimeUnit.MINUTES);
+        msg.addReactionRemoveListener(removeListener.get()).removeAfter(3, TimeUnit.MINUTES);
     }
 }
