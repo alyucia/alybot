@@ -28,8 +28,10 @@ public class DNDScraper {
 
     //RegEx strings
     private final String INITIATIVE_REGEX = "\\*\\*([A-Za-z]*(?:\\s[A-Za-z]*)?):\\sInitiative:\\sRoll\\*\\*:\\s1d20\\s\\(([*0-9]*)\\)\\s?([+-]\\s[0-9]{0,2})\\n\\*\\*Total\\*\\*:\\s([0-9]*)$";
-    private final String TITLE_REGEX = "^([A-Z]{1}[a-z]*(?:\\s[A-Z]{1}[a-z]*)?)\\s(attacks|casts|heals|makes)\\s(?:with\\s)?(?:a\\s)?(?:an\\s)?([a-zA-Z\\s]*)!$";
-    private final String ATTACK_REGEX = "^(?:(?:\\*\\*To\\sHit\\*\\*:\\s)([0-9]*d[0-9]*)\\s\\(([0-9*]*(?:,\\s[0-9*]*)*)\\)(\\s[+-]\\s[0-9]*)?\\s=\\s`([0-9]*)`\\n)?\\*\\*Damage(?:\\s\\(CRIT!\\))?\\*\\*:\\s([0-9]*d[0-9]*)\\s\\(([\\*0-9]*(?:,\\s[\\*0-9]*)*)\\)(\\s[+-]\\s[0-9]*)?\\s=\\s`([0-9]*)`$";
+    private final String TITLE_REGEX = "^([A-Z]{1}[a-z]*(?:\\s[A-Z]{1}[a-z]*)?)\\s(attacks|casts|heals|makes)\\s(?:with\\s)?(?:a\\s)?(?:an\\s)?([a-zA-Z\\s',+()0-9]*)!$";
+    private final String ATTACK_REGEX = "^(?:(?:\\*\\*To\\sHit\\*\\*:\\s)([0-9]*d[0-9]*)\\s\\(([0-9*]*(?:,\\s[0-9*]*)*)\\)\\s?([+-]\\s[0-9]*)?\\s=\\s`([0-9]*)`\\n)?\\*\\*Damage(?:\\s\\(CRIT!\\))?\\*\\*:\\s([0-9]*d[0-9]*)\\s\\(([\\*0-9]*(?:,\\s[\\*0-9]*)*)\\)\\s?([+-]\\s[0-9]*)?\\s=\\s`([0-9]*)`$";
+    private final String HIT_REGEX = "^(?:(?:\\*\\*To\\sHit\\*\\*:\\s)([0-9]*d[0-9]*)\\s\\(([0-9*]*(?:,\\s[0-9*]*)*)\\)\\s?([+-]\\s[0-9]*)?\\s=\\s`([0-9]*)`)";
+    //private final String DAMAGE_REGEX = "\\*\\*Damage(?:\\s\\(CRIT!\\))?\\*\\*:\\s([0-9]*d[0-9]*)\\s\\(([\\*0-9]*(?:,\\s[\\*0-9]*)*)\\)\\s?([+-]\\s[0-9]*)?\\s=\\s`([0-9]*)`$";
     private final String CHECK_REGEX = "^([0-9]*d[0-9]*)\\s\\(([*0-9]*(?:,\\s[0-9*]*)*)\\)\\s([+-]\\s[0-9]\\s)?=\\s`([0-9]*)`";
 
     private final ScheduledExecutorService scheduler;
@@ -55,14 +57,13 @@ public class DNDScraper {
                 executors.execute(()-> {
                     Message botMsg = event1.getMessage();
                     try {
-                        parseMessage(botMsg);
                         addReactionListeners(botMsg);
+                        parseMessage(botMsg);
                     } catch (RollWaitException e) {
                         var listener2 = new AtomicReference<MessageEditListener>();
                         listener2.set(event2 -> {
                             try {
-                                parseMessage(event1.getMessage());
-                                addReactionListeners(botMsg);
+                                parseMessage(event2.getMessage().get());
                             } catch (NotARollException ex) {
                                 //nothing, this is fine.
                             } catch (RollWaitException ex){
@@ -99,8 +100,8 @@ public class DNDScraper {
 
     private void parseMessage(Message msg) throws RollWaitException, NotARollException {
         List<DNDentry> eList = new ArrayList<>();
-        Pattern pattern = Pattern.compile(INITIATIVE_REGEX);
-        Matcher matcher = pattern.matcher(msg.getContent());
+
+        Matcher matcher = getMatcher(msg.getContent(), INITIATIVE_REGEX);
         //Check if it's an initiative roll, and parse it if it is.
         Instant createTime = msg.getCreationTimestamp();
         String msgId = msg.getIdAsString();
@@ -118,8 +119,8 @@ public class DNDScraper {
             } catch (IndexOutOfBoundsException e) {
                 throw new NotARollException();
             }
-            pattern = Pattern.compile(TITLE_REGEX);
-            matcher = pattern.matcher(title);
+            matcher = getMatcher(title, TITLE_REGEX);
+
             if (!matcher.matches())
                 throw new NotARollException();
             String name = matcher.group(1);
@@ -128,8 +129,7 @@ public class DNDScraper {
             //Check if it's an ability check/save. The embed is different.
             if (type.equalsIgnoreCase("makes") || type.equalsIgnoreCase("heals")) {
                 String meta = msg.getEmbeds().get(0).getDescription().get();
-                pattern = Pattern.compile(CHECK_REGEX);
-                matcher = pattern.matcher(meta);
+                matcher = getMatcher(meta, CHECK_REGEX);
                 if (!matcher.find())
                     throw new NotARollException();
                 String dice = matcher.group(1);
@@ -142,18 +142,21 @@ public class DNDScraper {
             }*/ else {
                 String meta = msg.getEmbeds().get(0).getFields().get(0).getValue();
                 if (meta.contains("Waiting for roll...")) {
+                    matcher = getMatcher(meta, HIT_REGEX);
+                    if (!matcher.find())
+                        throw new NotARollException();
+                    toHitMatcher(eList, matcher, createTime, msgId, name, skill);
+                    entries.put(msgId, eList);
+                    scheduleWrite(msgId);
                     throw new RollWaitException();
                 }
-                pattern = Pattern.compile(ATTACK_REGEX);
-                matcher = pattern.matcher(meta);
-                if (!matcher.matches())
+                matcher = getMatcher(meta, ATTACK_REGEX);
+                if (!matcher.find()) {
+                    System.out.println(meta);
                     throw new NotARollException();
+                }
                 if (meta.contains("To Hit")) {
-                    String attackDice = matcher.group(1);
-                    String attackRoll = matcher.group(2);
-                    String attackMod = matcher.group(3);
-                    String attackTotal = matcher.group(4);
-                    eList.add(new DNDentry(createTime, name, skill + " to hit", attackDice, attackRoll, attackMod, attackTotal, msgId));
+                    toHitMatcher(eList, matcher, createTime, msgId, name, skill);
                 }
                 String damageDice = matcher.group(5);
                 String damageRoll = matcher.group(6);
@@ -164,21 +167,43 @@ public class DNDScraper {
         }
         entries.put(msgId, eList);
 
-        scheduler.schedule(()->{
-            for (DNDentry entry : eList) {
-                try {
-                    if (entry.getUpload()) {
-                        sheetWriter.writeInfo(entry.asStringArrayList());
-                    }
-                } catch (Exception e) {
-                    e.printStackTrace();
-                }
-            }
-            entries.remove(msgId);
-
-        }, 3, TimeUnit.MINUTES);
+        scheduleWrite(msgId);
 
     }
+
+    private void toHitMatcher(List<DNDentry> eList, Matcher matcher, Instant createTime, String msgId, String name, String skill) {
+        String attackDice = matcher.group(1);
+        String attackRoll = matcher.group(2);
+        String attackMod = matcher.group(3);
+        String attackTotal = matcher.group(4);
+        eList.add(new DNDentry(createTime, name, skill + " to hit", attackDice, attackRoll, attackMod, attackTotal, msgId));
+    }
+
+    private Matcher getMatcher(String meta, String regex) {
+        Matcher matcher;
+        Pattern pattern;
+        pattern = Pattern.compile(regex);
+        matcher = pattern.matcher(meta);
+        return matcher;
+    }
+
+    private void scheduleWrite(String msgId) {
+        scheduler.schedule(()->{
+            if (entries.containsKey(msgId)) {
+                try {
+                    for (DNDentry entry : entries.get(msgId)) {
+                        if (entry.getUpload()) {
+                            sheetWriter.writeInfo(entry.asStringArrayList());
+                        }
+                    }
+                }catch (Exception e) {
+                    e.printStackTrace();
+                }
+                entries.remove(msgId);
+            }
+        }, 10, TimeUnit.SECONDS);
+    }
+
     public void addReactionListeners(Message msg){
         String msgId = msg.getIdAsString();
         msg.addReaction(EmojiParser.parseToUnicode(":x:"));

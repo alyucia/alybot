@@ -45,7 +45,7 @@ public class SheetWriter {
 
     public SheetWriter(String ssId){
         this.spreadsheetId = ssId;
-        executorPool = Executors.newFixedThreadPool(MAX_THREADS);
+        executorPool = Executors.newSingleThreadExecutor();
     }
 
     /**
@@ -94,7 +94,7 @@ public class SheetWriter {
                 }
                 requests.add(new Request()
                         .setAppendCells(new AppendCellsRequest()
-                                .setSheetId(408888496)
+                                .setSheetId(0)
                                 .setRows(Arrays.asList(
                                         new RowData().setValues(values)))
                                 .setFields("userEnteredValue,userEnteredFormat.backgroundColor")));

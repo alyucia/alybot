@@ -35,7 +35,7 @@ public class DiscordBot {
     public void startListener() {
 
         api.addMessageCreateListener(event -> {
-            Pattern pattern = Pattern.compile("^" + prefix + "([a-zA-Z]*)(?:\\s([a-zA-Z\\s]*))?", Pattern.CASE_INSENSITIVE);
+            Pattern pattern = Pattern.compile("^" + prefix + "([a-zA-Z]*)(?:\\s([a-zA-Z\\s0-9]*))?", Pattern.CASE_INSENSITIVE);
             Matcher matcher = pattern.matcher(event.getMessageContent());
             if (matcher.matches()) {
                 String command = matcher.group(1);
@@ -86,7 +86,7 @@ public class DiscordBot {
         TextChannel dndChannel = event.getChannel();
         userMessage.addReaction(EmojiParser.parseToUnicode(":white_check_mark:"));
 
-        SheetWriter sheetWriter = new SheetWriter("1eftAShN3ANHruHbOoeccwpo3gdEtz8LiLygOtO6Q3I4");
+        SheetWriter sheetWriter = new SheetWriter("1UQXrcdjCrAHDvJUgGk0rL5C7Tg9S9PTzz3Q3udovl3E");
 
         DNDScraper dndScraper = new DNDScraper(api.getThreadPool(), dndChannel, sheetWriter, String.valueOf(api.getClientId()));
         dndScraper.startListening();
