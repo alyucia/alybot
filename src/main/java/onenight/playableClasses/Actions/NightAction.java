@@ -1,10 +1,17 @@
 package onenight.playableClasses.Actions;
 
+import onenight.Game;
+import onenight.errors.badInputError;
+import onenight.oneNightAdapterInterface;
 import onenight.playableClasses.*;
 
 public class NightAction implements ActionVisitor {
+    int[] userInput;
+    public NightAction(int[] ui){
+        this.userInput = ui;
+    }
     @Override
-    public void doAction(PlayableClass player) {
+    public void doAction(PlayableClassInterface player) throws badInputError {
         player.accept(this);
     }
 

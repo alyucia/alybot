@@ -201,7 +201,7 @@ public class DNDScraper {
                 }
                 entries.remove(msgId);
             }
-        }, 10, TimeUnit.SECONDS);
+        }, 3, TimeUnit.MINUTES);
     }
 
     public void addReactionListeners(Message msg){

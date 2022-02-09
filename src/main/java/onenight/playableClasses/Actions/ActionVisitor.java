@@ -3,7 +3,7 @@ package onenight.playableClasses.Actions;
 import onenight.playableClasses.*;
 
 public interface ActionVisitor {
-    public void doAction(PlayableClass player);
+    public void doAction(PlayableClassInterface player);
 
     public void doAction(Doppelganger player);
     public void doAction(Drunk player);
