@@ -7,7 +7,7 @@ import org.joda.time.format.DateTimeFormat;
 import org.joda.time.format.DateTimeFormatter;
 import org.json.JSONObject;
 
-import java.io.FileWriter;
+import java.io.*;
 import java.util.*;
 import java.util.regex.*;
 
@@ -101,6 +101,20 @@ public class helpers {
 
         }
         return dt;
+    }
+
+    public static void writeFile(Serializable obj, String target){
+        try {
+            File file = new File("src/main/resources/" + target);
+            FileOutputStream fos = new FileOutputStream(file);
+            ObjectOutputStream oos = new ObjectOutputStream(fos);
+            oos.writeObject(obj);
+            oos.flush();
+            oos.close();
+            fos.close();
+        } catch (Exception e) {
+            e.printStackTrace();
+        }
     }
 
 /*

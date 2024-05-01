@@ -5,7 +5,9 @@ import com.vdurmont.emoji.EmojiParser;
 import discordFrontend.dndscraper.DNDScraper;
 import org.javacord.api.entity.message.component.ActionRow;
 import org.javacord.api.entity.message.component.Button;
+import org.javacord.api.entity.server.Server;
 import org.javacord.api.interaction.*;
+import org.javacord.api.interaction.callback.ComponentInteractionOriginalMessageUpdater;
 import org.joda.time.DateTime;
 import org.joda.time.DateTimeZone;
 import org.joda.time.format.DateTimeFormat;
@@ -18,10 +20,8 @@ import org.javacord.api.entity.message.MessageSet;
 import org.javacord.api.entity.user.User;
 import org.javacord.api.event.message.MessageCreateEvent;
 
-import java.util.ArrayList;
-import java.util.Arrays;
-import java.util.List;
-import java.util.TimeZone;
+import java.io.Serializable;
+import java.util.*;
 import java.util.concurrent.ExecutionException;
 import java.util.concurrent.ExecutorService;
 import java.util.regex.Matcher;
@@ -34,17 +34,25 @@ public class DiscordBot {
     private final DiscordApi api;
     private final ExecutorService executors;
     private final String prefix;
+    private HashMap<Long, HashMap<String, AutoReact>> autoreacts;
 
-    public DiscordBot(String botToken, String px){
+    public DiscordBot(String botToken, String px, HashMap map){
         this.api = new DiscordApiBuilder().setToken(botToken).login().join();
         this.executors = api.getThreadPool().getExecutorService();
         this.prefix = px;
+        this.autoreacts = map;
 
         System.out.println("You can invite the bot by using the following url: " + api.createBotInvite());
     }
     public void startListener() {
 
         api.addMessageCreateListener(event -> {
+            Long server = event.getServer().get().getId();
+            HashMap<String, AutoReact> ars = autoreacts.getOrDefault(server, new HashMap<String, AutoReact>());
+            if(ars.containsKey(event.getMessageContent())){
+                ars.get(event.getMessageContent()).trigger(event.getChannel(), event.getMessage().getUserAuthor().get().getId());
+            }
+
             Pattern pattern = Pattern.compile("^" + prefix + "([a-zA-Z]*)(?:\\s(.*))?", Pattern.CASE_INSENSITIVE);
             Matcher matcher = pattern.matcher(event.getMessageContent());
             if (matcher.matches()) {
@@ -76,11 +84,15 @@ public class DiscordBot {
                 )
                 .createGlobal(api)
                 .join();
-        SlashCommand createAutoReact = SlashCommand.with("createautoreact", "Create an autoreact message",
+        SlashCommand createAutoReact = SlashCommand.with("autoreact", "Commands to modify autoreact messages",
                         Arrays.asList(
-                                SlashCommandOption.create(SlashCommandOptionType.STRING, "trigger", "Trigger phrase", false),
-                                SlashCommandOption.create(SlashCommandOptionType.STRING, "users", "Default - all", false),
-                                SlashCommandOption.create(SlashCommandOptionType.STRING, "message", "Autoreact message", false)
+                                SlashCommandOption.createWithOptions(SlashCommandOptionType.SUB_COMMAND, "create", "Creates autoreact messages",
+                                        Arrays.asList(
+                                                SlashCommandOption.create(SlashCommandOptionType.STRING, "trigger", "Trigger phrase", true),
+                                                SlashCommandOption.create(SlashCommandOptionType.STRING, "message", "Autoreact message", true),
+                                                SlashCommandOption.create(SlashCommandOptionType.STRING, "users", "Default - all", false)
+                                        )
+                                )
                         )
                 )
                 .createGlobal(api)
@@ -168,6 +180,7 @@ public class DiscordBot {
                     case "ping" -> "ping!";
                     case "timestamp" -> timeStampSlash(slashCommandInteraction);
                     case "reminder" -> reminderSlash(slashCommandInteraction);
+                    case "autoreact" -> autoReact(slashCommandInteraction);
                     default -> "null";
                 };
                 if (command.equals("ping") || command.equals("timestamp")) {
@@ -175,7 +188,7 @@ public class DiscordBot {
                             .setContent(response)
                             .respond();
                 }
-                if (command.equals("reminder") || command.equals("createautoreact")) {
+                /*if (command.equals("reminder") || command.equals("a")) {
                     slashCommandInteraction.createImmediateResponder()
                             .setContent(response)
                             .addComponents(
@@ -186,20 +199,82 @@ public class DiscordBot {
                             )
                             .respond();
                     api.addButtonClickListener(buttonEvent->{
-                        //event.getInteraction().get
+                        buttonEvent.getButtonInteraction();
                     });
 
-                }
+                }*/
             } catch (Exception e){
-                response = "Error";
+                response = "Error: ";
                 slashCommandInteraction.createImmediateResponder()
                         .setContent(response)
                         .respond();
+                e.printStackTrace();
             }
 
 
         });
     }
+
+    private String autoReact(SlashCommandInteraction event) throws Exception {
+        Server server = event.getServer().get();
+        SlashCommandInteractionOption op = event.getFirstOption().get();
+        String res = "";
+        switch (op.getName()) {
+            case "create":
+                HashMap<String, AutoReact> reacts = autoreacts.getOrDefault(server.getId(), new HashMap<String, AutoReact>());
+                String trig = op.getOptionByName("trigger").get().getStringValue().get();
+                if (reacts.containsKey(trig))
+                    throw new Exception("Already exists");
+                List<Long> lids = new ArrayList<>();
+                String content = op.getOptionByName("message").get().getStringValue().get();
+                res = "Trigger phrase: " + trig +
+                        "\nMessage content: " + content;
+                if(op.getOptionByName("users").isPresent()) {
+                    String users = op.getOptionByName("users").get().getStringValue().get();
+                    Pattern digits = Pattern.compile("([\\d]+)");
+                    Matcher matcher = digits.matcher(users);
+                    while (matcher.find()) {
+                        lids.add(Long.parseLong(matcher.group()));
+                    }
+                    res += "\nUsers:";
+                    for (Long lid : lids){
+                        res += " " + api.getUserById(lid).get().getName();
+                    }
+
+                }
+                event.createImmediateResponder()
+                        .setContent(res)
+                        .addComponents(
+                                ActionRow.of(
+                                        Button.success("confirm", "Confirm"),
+                                        Button.danger("cancel", "Cancel")
+                                )
+                        )
+                        .respond();
+                api.addButtonClickListener(buttonEvent->{
+                    String type = buttonEvent.getButtonInteraction().getCustomId();
+                    ComponentInteractionOriginalMessageUpdater updater = buttonEvent.getButtonInteraction().createOriginalMessageUpdater();
+                    updater.setContent(buttonEvent.getButtonInteraction().getMessage().get().getContent());
+                    if (type.equals("confirm")){
+                        AutoReact ar = new AutoReact(lids, content);
+                        reacts.put(trig, ar);
+                        autoreacts.put(server.getId(), reacts);
+                        helpers.writeFile(autoreacts, "autoreacts.ser");
+                        updater.append("\n Successfully added");
+                    } else if (type.equals("cancel")){
+                        updater.append("\n Canceled");
+                    }
+                    updater.removeAllComponents();
+                    updater.update();
+                    buttonEvent.getButtonInteraction().acknowledge();
+
+                });
+
+                break;
+        }
+        return "null";
+    }
+
     public void doCommand(String command, String parameters, MessageCreateEvent event) throws exceptions.NotCommandException, exceptions.BadParameterException, ExecutionException, InterruptedException {
         switch (command){
             case "ping":
@@ -223,7 +298,6 @@ public class DiscordBot {
     }
 
 
-
     //Starts a DND tracking session.
     private void startDND(MessageCreateEvent event) {
         Message userMessage = event.getMessage();
@@ -245,8 +319,6 @@ public class DiscordBot {
             System.out.println(e.getMessage());
         }*/
     }
-
-
 
 
     private void startGame(MessageCreateEvent event) throws ExecutionException, InterruptedException {
