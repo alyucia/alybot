@@ -1,6 +1,5 @@
 package onenight;
 
-import frontend.discordOnenightAdapter;
 import onenight.gameState.GameState;
 
 import java.util.Map;
